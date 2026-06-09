@@ -1,0 +1,17 @@
+[project]
+name = "healthchat"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115,<1.0",
+    "uvicorn>=0.30,<1.0",
+    "langchain>=0.3,<1.0",
+    "langchain-ollama>=0.2,<1.0",
+    "langgraph>=0.2,<1.0",
+    "pydantic>=2.7,<3.0",
+    "python-multipart>=0.0.9",
+    "requests>=2.32",
+    "streamlit>=1.38,<2.0",
+]
