@@ -1,8 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 from typing import Dict
+from backend.doctor_client import Doctor, DoctorClient
 from backend.graph import MedicalGraph
 from backend.schema import PatientState
 
@@ -12,10 +14,10 @@ app = FastAPI()
 async def unhandled(request, exc):
     return JSONResponse(status_code=500, content={"detail": str(exc), "type": type(exc).__name__})
 
-# CORS for Streamlit
+# CORS for local frontends
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8501"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8501"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -24,6 +26,7 @@ app.add_middleware(
 # Store sessions in memory (use Redis for production)
 sessions: Dict[str, PatientState] = {}
 medical_graph = MedicalGraph()
+doctor_client = DoctorClient()
 
 class ChatRequest(BaseModel):
     session_id: str
@@ -34,6 +37,9 @@ class ChatResponse(BaseModel):
     session_complete: bool
     emergency: bool
     current_schema: dict
+    doctor_keyword: str | None = None
+    doctors: list[Doctor] = Field(default_factory=list)
+    doctor_lookup_error: str | None = None
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest):
@@ -52,12 +58,25 @@ async def chat_endpoint(request: ChatRequest):
     
     # Update session
     sessions[request.session_id] = updated_state
+
+    doctor_keyword = updated_state.doctor_keyword or updated_state.chief_complaint or "medicine"
+    doctors = []
+    doctor_lookup_error = None
+
+    if updated_state.session_complete and not updated_state.emergency_flag:
+        lookup = await run_in_threadpool(doctor_client.lookup, doctor_keyword)
+        doctor_keyword = lookup.keyword
+        doctors = lookup.doctors
+        doctor_lookup_error = lookup.error
     
     return ChatResponse(
         response=bot_response,
         session_complete=updated_state.session_complete,
         emergency=updated_state.emergency_flag,
-        current_schema=updated_state.model_dump(mode="json")
+        current_schema=updated_state.model_dump(mode="json"),
+        doctor_keyword=doctor_keyword if updated_state.session_complete else None,
+        doctors=doctors,
+        doctor_lookup_error=doctor_lookup_error,
     )
 
 @app.delete("/session/{session_id}")

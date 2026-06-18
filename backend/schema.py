@@ -13,6 +13,7 @@ class PatientState(BaseModel):
     severity: Optional[Severity] = Field(None, description="Severity level of the complaint")
     duration: Optional[str] = Field(None, description="How long the problem has existed")
     associated_symptoms: List[str] = Field(default_factory=list, description="Other symptoms mentioned")
+    doctor_keyword: Optional[str] = Field(None, description="Keyword for doctor speciality lookup")
     emergency_flag: bool = Field(default=False, description="True if emergency detected")
     session_complete: bool = Field(default=False, description="True when report is ready")
     turn_count: int = Field(default=0, description="Number of exchanges so far")
@@ -27,3 +28,4 @@ class ExtractionOutput(BaseModel):
     severity: Optional[Severity] = None
     duration: Optional[str] = None
     associated_symptoms: List[str] = []
+    doctor_keyword: Optional[str] = None

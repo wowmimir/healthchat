@@ -47,12 +47,13 @@ def main():
         backend.wait()
         sys.exit(1)
     
-    # Start frontend
+    # Start Vite frontend
     frontend = subprocess.Popen(
-        ["uv", "run", "streamlit", "run", "frontend/streamlit_app.py", "--server.port", "8501"]
+        ["bun", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"],
+        cwd=os.path.join(os.getcwd(), "vite-frontend")
     )
     
-    if not wait_for_url("http://localhost:8501", "Frontend"):
+    if not wait_for_url("http://localhost:5173", "Frontend"):
         backend.terminate()
         frontend.terminate()
         backend.wait()
@@ -61,7 +62,7 @@ def main():
     
     print("\n✅ Ready!")
     print("   Backend: http://localhost:8000")
-    print("   Frontend: http://localhost:8501")
+    print("   Frontend: http://localhost:5173")
     print("\nPress Ctrl+C to stop\n")
     
     try:

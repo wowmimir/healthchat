@@ -48,6 +48,7 @@ class OllamaClient:
     - severity: Extract "mild", "moderate", "severe", or "emergency" if explicitly stated. If patient says "mild pain", extract "mild".
     - duration: Extract if patient gives time frame like "2 days", "3 hours". Otherwise leave null.
     - associated_symptoms: Extract any additional symptoms mentioned.
+    - doctor_keyword: Extract one short doctor/speciality search keyword. Use "medicine" for fever, cough, general weakness, chest pain, or unclear general illness. Use "orthopedic" for bone/joint/walking issues. Use "cardiology" for heart-specific complaints. Use the chief complaint if unsure.
 
     DO NOT leave chief_complaint null if the patient mentions any symptom or pain.
 

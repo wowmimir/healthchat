@@ -68,6 +68,11 @@ class MedicalGraph:
         
         if extraction.associated_symptoms:
             state.associated_symptoms.extend(extraction.associated_symptoms)
+
+        if extraction.doctor_keyword:
+            state.doctor_keyword = extraction.doctor_keyword
+        elif not state.doctor_keyword and state.chief_complaint:
+            state.doctor_keyword = self._fallback_doctor_keyword(state.chief_complaint)
         
         state.turn_count += 1
         return state
@@ -235,3 +240,11 @@ Recommendation: Schedule consultation with doctor
 Full JSON report:
 {state.model_dump_json(indent=2)}
 """
+
+    def _fallback_doctor_keyword(self, complaint: str) -> str:
+        complaint = complaint.lower()
+        if any(term in complaint for term in ["walk", "bone", "joint", "leg", "fracture"]):
+            return "orthopedic"
+        if any(term in complaint for term in ["heart", "cardiac"]):
+            return "cardiology"
+        return "medicine"
