@@ -4,6 +4,4 @@ langchain
 langgraph
 langchain-ollama
 pydantic
-streamlit
 requests
-python-multipart

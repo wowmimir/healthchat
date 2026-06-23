@@ -11,7 +11,5 @@ dependencies = [
     "langchain-ollama>=0.2,<1.0",
     "langgraph>=0.2,<1.0",
     "pydantic>=2.7,<3.0",
-    "python-multipart>=0.0.9",
     "requests>=2.32",
-    "streamlit>=1.38,<2.0",
 ]

@@ -1,6 +1,10 @@
 from langgraph.graph import StateGraph, END
-from backend.schema import PatientState, Severity
+from backend.schema import PatientState, Severity, BiologicalSex
 from backend.llm_client import OllamaClient
+from pathlib import Path
+from langchain_core.runnables import RunnableConfig
+import json
+from backend.database import save_or_update_report
 
 class MedicalGraph:
     def __init__(self):
@@ -46,7 +50,20 @@ class MedicalGraph:
             state.model_dump(exclude={"conversation_history"})
         )
         
-        # Update state
+        # --- Update Domain A: Identity & Demographics ---
+        if extraction.patient_name:
+            state.patient_name = extraction.patient_name
+        if extraction.age is not None:
+            state.age = extraction.age
+        if extraction.biological_sex:
+            try:
+                state.biological_sex = BiologicalSex(extraction.biological_sex)
+            except ValueError:
+                pass
+        if extraction.residence_area:
+            state.residence_area = extraction.residence_area
+
+        # --- Update Domain B: Current Clinical Presentation ---
         if extraction.chief_complaint:
             state.chief_complaint = extraction.chief_complaint
         else:
@@ -68,6 +85,9 @@ class MedicalGraph:
         
         if extraction.associated_symptoms:
             state.associated_symptoms.extend(extraction.associated_symptoms)
+
+        if extraction.functional_limitation:
+            state.functional_limitation = extraction.functional_limitation
 
         if extraction.doctor_keyword:
             state.doctor_keyword = extraction.doctor_keyword
@@ -115,7 +135,7 @@ class MedicalGraph:
         return state
     
     async def completeness_node(self, state: PatientState) -> PatientState:
-        """Determine which fields are missing"""
+        """Determine which fields are missing based on a tiered priority constraint"""
         
         # If emergency, no fields are "missing" - we report immediately
         if state.emergency_flag:
@@ -124,12 +144,24 @@ class MedicalGraph:
         
         missing = []
         
+        # Tier 1 Priority: Mandatory Clinical Fields
         if not state.chief_complaint:
             missing.append("chief_complaint")
         if not state.severity:
             missing.append("severity")
         if not state.duration:
             missing.append("duration")
+            
+        # Tier 2 Priority: High-Value Context Fields (Only seek if Tier 1 is collected)
+        if not missing:
+            if not state.age:
+                missing.append("age")
+            if not state.biological_sex:
+                missing.append("biological_sex")
+            if not state.patient_name:
+                missing.append("patient_name")
+            if not state.residence_area:
+                missing.append("residence_area")
             
         state.missing_fields = missing
         return state
@@ -138,13 +170,30 @@ class MedicalGraph:
         """Generate a validation question for missing info"""
         return state
     
-    async def report_node(self, state: PatientState) -> PatientState:
-        """Generate final report"""
+    async def report_node(self, state: PatientState, config: RunnableConfig = None) -> PatientState:
+        """Generate final report summary and save a customized snapshot to SQLite database for auditing"""
         state.session_complete = True
+        
+        # 1. Retrieve session_id safely from runtime configuration metadata context
+        session_id = "unknown_session"
+        if config and "configurable" in config and "session_id" in config["configurable"]:
+            session_id = config["configurable"]["session_id"]
+            
+        try:
+            # 2. Serialize the Pydantic state context into standard JSON compatible types
+            state_data = state.model_dump(mode="json")
+            
+            # 3. Fire the insertion/upsert query to SQLite database
+            save_or_update_report(session_id, state_data)
+            
+        except Exception as e:
+            # Shield main request loop from crashing out if database locked or errored
+            print(f"CRITICAL DEBUG ERROR: Failed to write report snapshot to SQL: {e}")
+            
         return state
     
     def should_continue_or_end(self, state: PatientState) -> str:
-        """Decide next step"""
+        """Decide next step based on session state metrics"""
         # Emergency: immediate report
         if state.emergency_flag:
             return "report"
@@ -157,62 +206,74 @@ class MedicalGraph:
         if state.turn_count >= 4:
             return "report"
         
-        # Determine missing fields in priority order
-        missing = []
+        # Evaluation using priority tracking
         if not state.chief_complaint:
-            # If severity is severe but no chief complaint, still report
             if state.severity and state.severity.value == "severe":
                 return "report"
-            missing.append("chief_complaint")
-        elif not state.severity:
-            missing.append("severity")
-        elif not state.duration:
-            missing.append("duration")
-        
-        state.missing_fields = missing
-        
-        if not missing:
-            return "report"
-        
-        return "validate"
-    
-    async def process_turn(self, user_message: str, current_state: PatientState) -> tuple[PatientState, str]:
-        """Process one user message and return updated state + bot response"""
-        if user_message.strip() == "":
-            return current_state, "Could you tell me a bit more about your symptoms?"
-        
-        # Store message with history
-        current_state.latest_user_message = user_message
-        current_state.conversation_history.append({"role": "user", "content": user_message})
-        
-        # Run the graph until completion
-        final_state = await self.workflow.ainvoke(current_state)
-        if isinstance(final_state, dict):
-            final_state = PatientState.model_validate(final_state)
-        
-        # Generate response based on final state
-        if final_state.session_complete:
-            response = self.generate_report(final_state)
-        elif final_state.missing_fields:
-            response = self.llm_client.generate_validation_question(
-                final_state.missing_fields,
-                final_state.conversation_history
-            )
-        else:
-            response = "I understand. Please continue or tell me more about your symptoms."
+            return "validate"
+        elif not state.severity or not state.duration:
+            return "validate"
             
-        return final_state, response
+        # If core presentation fields are satisfied, allow up to max turns for optional demographics
+        if state.missing_fields:
+            return "validate"
+        
+        return "report"
+    
+    async def process_turn(self, user_message: str, current_state: PatientState, session_id: str = "unknown_session") -> tuple[PatientState, str]:
+        """Processes a single conversational exchange turn inside the LangGraph pipeline loop context"""
+        # 1. Append message to conversation history state layers
+        current_state.conversation_history.append({"role": "user", "content": user_message})
+        current_state.latest_user_message = user_message
+        
+        # 2. Build the metadata context block required by LangGraph execution scopes
+        config = {"configurable": {"session_id": session_id}}
+        
+        # 3. Invoke workflow (returns a dictionary representation of the state)
+        raw_result = await self.workflow.ainvoke(current_state, config=config)
+        
+        # 4. Handle conversion: turn the result dict back into a proper Pydantic PatientState object
+        if isinstance(raw_result, dict):
+            final_state = PatientState(**raw_result)
+        else:
+            final_state = raw_result
+            
+        # 5. Extract the last assistant response directly out of history
+        bot_response = ""
+        if final_state.conversation_history:
+            # Look backwards for the last message added by the model/graph
+            for msg in reversed(final_state.conversation_history):
+                if msg.get("role") in ["assistant", "ai", "bot"]:
+                    bot_response = msg.get("content", "")
+                    break
+        
+        # Fallback if no message was added by the workflow nodes
+        if not bot_response:
+            bot_response = "Thank you for the update. Processing your assessment context."
+        
+        return final_state, bot_response
     
     def generate_report(self, state: PatientState) -> str:
-        """Create final report text"""
+        """Create final clinical profile and presentation report text"""
+        name = state.patient_name or 'Anonymous'
+        age = f"{state.age} y/o" if state.age else 'Age not specified'
+        sex = state.biological_sex.value if state.biological_sex else 'Sex not specified'
+        area = state.residence_area or 'Location not specified'
+        
         if state.emergency_flag:
             severity = state.severity.value if state.severity else 'Not specified'
             
             return f"""🚨 **URGENT MEDICAL ATTENTION NEEDED** 🚨
 
+Patient Demographic Profile:
+- Name: {name}
+- Age/Sex: {age} | {sex}
+- Residence: {area}
+
 Patient reports: {state.chief_complaint}
 Severity: {severity} (EMERGENCY)
 Associated symptoms: {', '.join(state.associated_symptoms) if state.associated_symptoms else 'None reported'}
+Functional Limitation: {state.functional_limitation or 'None reported'}
 
 **ACTION REQUIRED: Patient needs immediate emergency care. Do not wait for appointment.**
 
@@ -228,11 +289,17 @@ Chat Session Report (for doctor):
         
         return f"""**Session Complete** - Medical Report
 
+Patient Demographic Profile:
+- Name: {name}
+- Age/Sex: {age} | {sex}
+- Residence: {area}
+
 Patient Summary:
 - Chief complaint: {state.chief_complaint or 'Not specified'}
 - Severity: {severity}
 - Duration: {duration}
 - Associated symptoms: {', '.join(state.associated_symptoms) if state.associated_symptoms else 'None'}
+- Functional Limitation: {state.functional_limitation or 'None reported'}
 
 Recommendation: Schedule consultation with doctor
 
@@ -243,8 +310,8 @@ Full JSON report:
 
     def _fallback_doctor_keyword(self, complaint: str) -> str:
         complaint = complaint.lower()
-        if any(term in complaint for term in ["walk", "bone", "joint", "leg", "fracture"]):
+        if any(term in complaint for term in ["walk", "bone", "joint", "leg", "fracture", "limp"]):
             return "orthopedic"
-        if any(term in complaint for term in ["heart", "cardiac"]):
+        if any(term in complaint for term in ["heart", "cardiac", "chest pain"]):
             return "cardiology"
         return "medicine"

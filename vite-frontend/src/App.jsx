@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import './App.css'
+import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
@@ -18,12 +18,14 @@ function Field({ label, value }) {
 
 function EmergencyPanel() {
   return (
-    <section className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-950">
-      <h2 className="text-lg font-bold">Emergency help</h2>
-      <ul className="mt-3 list-disc space-y-2 pl-5 text-sm">
+    <section className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-950 shadow-sm">
+      <h2 className="text-lg font-bold text-red-700 flex items-center gap-2">
+        <span>⚠️</span> Emergency Helplines
+      </h2>
+      <ul className="mt-3 list-disc space-y-2 pl-5 text-sm font-medium">
         <li><strong>National Emergency Number (ERSS):</strong> 112</li>
         <li><strong>Medical Emergency / Ambulance:</strong> 108 or 102</li>
-        <li><strong>National Health Helpline / Health Information:</strong> 104</li>
+        <li><strong>National Health Helpline:</strong> 104</li>
       </ul>
     </section>
   )
@@ -102,14 +104,29 @@ function App() {
       if (!response.ok) throw new Error(`API returned ${response.status}`)
       const data = await response.json()
 
-      setMessages((current) => [...current, { role: 'assistant', content: data.response }])
+      const rawResponse = data.response || ''
+
+      // Intercept clinical text summaries and separate them from timeline bubbles
+      const isReport = 
+        rawResponse.includes('Patient Summary:') || 
+        rawResponse.includes('**Session Complete**') ||
+        rawResponse.includes('URGENT MEDICAL ATTENTION') ||
+        rawResponse.includes('Chat Session Report')
+
+      if (!isReport) {
+        setMessages((current) => [...current, { role: 'assistant', content: rawResponse }])
+      } else {
+        let cleanReport = rawResponse.split('Full JSON report:')[0].trim()
+        if (cleanReport.endsWith('---')) cleanReport = cleanReport.slice(0, -3).trim()
+        setFinalReport(cleanReport)
+      }
+
       setSchema(data.current_schema)
       setEmergency(data.emergency)
       setComplete(data.session_complete)
       setDoctorKeyword(data.doctor_keyword || '')
       setDoctors(data.doctors || [])
       setDoctorError(data.doctor_lookup_error || '')
-      if (data.session_complete) setFinalReport(data.response)
     } catch (err) {
       setError(err.message || 'Request failed')
     } finally {
@@ -121,7 +138,7 @@ function App() {
     try {
       await fetch(`${API_BASE}/session/${sessionId}`, { method: 'DELETE' })
     } catch {
-      // Best effort cleanup only.
+      // Best effort cleanup
     }
     setSessionId(newSessionId())
     setMessages([])
@@ -138,8 +155,8 @@ function App() {
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
-      <div className="mx-auto grid max-w-6xl gap-4 px-4 py-5 lg:grid-cols-[1fr_320px]">
-        <section className="flex min-h-[calc(100vh-40px)] flex-col rounded-lg border border-slate-200 bg-white">
+      <div className="mx-auto max-w-3xl px-4 py-5">
+        <section className="flex min-h-[calc(100vh-40px)] flex-col rounded-lg border border-slate-200 bg-white shadow-sm">
           <header className="flex items-center justify-between border-b border-slate-200 p-4">
             <div>
               <h1 className="text-xl font-bold">Rural Medical Assistant</h1>
@@ -150,12 +167,13 @@ function App() {
             </button>
           </header>
 
-          <div className="flex-1 space-y-3 overflow-y-auto p-4">
+          <div className="flex-1 space-y-4 overflow-y-auto p-4">
             {messages.length === 0 && (
               <div className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">
                 Tell me symptom, duration, severity. Example: fever since yesterday, 6/10.
               </div>
             )}
+
             {messages.map((message, index) => (
               <div key={`${message.role}-${index}`} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[82%] whitespace-pre-wrap rounded-lg px-4 py-3 text-sm leading-6 ${
@@ -165,8 +183,47 @@ function App() {
                 </div>
               </div>
             ))}
-            {loading && <p className="text-sm text-slate-500">Analyzing symptoms...</p>}
+
+            {loading && <p className="text-sm text-slate-500 animate-pulse">Analyzing symptoms...</p>}
             {error && <p className="rounded-md bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p>}
+
+            {/* Assessment Completion Banners */}
+            {complete && (
+              <div className="flex justify-start pt-2 w-full">
+                {emergency ? (
+                  <div className="w-full rounded-lg bg-red-100 border border-red-300 p-4 text-sm text-red-950 leading-6 font-semibold shadow-sm animate-pulse">
+                    <div className="flex items-center gap-2 text-base text-red-700 font-bold mb-1">
+                      <span>🚨</span> Urgent Critical Alert
+                    </div>
+                    Immediate clinical medical attention is required. Please follow the safety guidance and phone lines referenced below immediately.
+                  </div>
+                ) : (
+                  <div className="max-w-[82%] rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-900 leading-6 font-medium">
+                    Thank you. Your assessment is complete. Below are the recommended paths forward based on your summary.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Emergency Support Panel Render Path */}
+            {emergency && (
+              <div className="mt-4 pt-2">
+                <EmergencyPanel />
+              </div>
+            )}
+
+            {/* Routine Doctor Directory Render Path */}
+            {complete && !emergency && (
+              <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
+                <h2 className="text-base font-bold text-slate-900">Recommended Available Doctors</h2>
+                {doctorError && <p className="rounded-md bg-amber-50 p-2 text-sm text-amber-800">{doctorError}</p>}
+                <div className="space-y-3">
+                  {doctors.length > 0
+                    ? doctors.map((doctor) => <DoctorCard doctor={doctor} key={doctor.id} />)
+                    : !doctorError && <p className="text-sm text-slate-600">No matching doctors found in your region.</p>}
+                </div>
+              </div>
+            )}
           </div>
 
           <form className="flex gap-2 border-t border-slate-200 p-4" onSubmit={sendMessage}>
@@ -186,50 +243,6 @@ function App() {
             </button>
           </form>
         </section>
-
-        <aside className="space-y-4">
-          <section className="rounded-lg border border-slate-200 bg-white p-4">
-            <h2 className="text-lg font-bold">Patient schema</h2>
-            <div className="mt-3 grid gap-2">
-              <Field label="Complaint" value={schema?.chief_complaint} />
-              <Field label="Severity" value={schema?.severity} />
-              <Field label="Duration" value={schema?.duration} />
-              <Field label="Doctor keyword" value={schema?.doctor_keyword || doctorKeyword} />
-            </div>
-            {associatedSymptoms.length > 0 && (
-              <p className="mt-3 text-sm text-slate-600">Symptoms: {associatedSymptoms.join(', ')}</p>
-            )}
-            {schema?.missing_fields?.length > 0 && (
-              <p className="mt-3 rounded-md bg-amber-50 p-2 text-sm font-semibold text-amber-800">
-                Missing: {schema.missing_fields.join(', ')}
-              </p>
-            )}
-          </section>
-
-          {emergency && <EmergencyPanel />}
-
-          {complete && finalReport && (
-            <section className="rounded-lg border border-slate-200 bg-white p-4">
-              <h2 className="text-lg font-bold">Final report</h2>
-              <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap rounded-md bg-slate-950 p-3 text-xs leading-5 text-slate-100">
-                {finalReport}
-              </pre>
-            </section>
-          )}
-
-          {complete && !emergency && (
-            <section className="rounded-lg border border-slate-200 bg-white p-4">
-              <h2 className="text-lg font-bold">Available doctors</h2>
-              {doctorKeyword && <p className="mt-1 text-sm text-slate-500">Keyword: {doctorKeyword}</p>}
-              {doctorError && <p className="mt-3 rounded-md bg-amber-50 p-2 text-sm text-amber-800">{doctorError}</p>}
-              <div className="mt-3 space-y-3">
-                {doctors.length > 0
-                  ? doctors.map((doctor) => <DoctorCard doctor={doctor} key={doctor.id} />)
-                  : !doctorError && <p className="text-sm text-slate-600">No doctors found.</p>}
-              </div>
-            </section>
-          )}
-        </aside>
       </div>
     </main>
   )

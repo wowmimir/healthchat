@@ -1,3 +1,1 @@
-- switch to vite frontend
-- after report generation -> hit api -> display top doctor cards
-- clicking book appointment button should lead to appointment booking page
+- finish documentation

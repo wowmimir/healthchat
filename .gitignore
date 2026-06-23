@@ -3,3 +3,5 @@
 .venv/
 plan.md
 apiendpoint.json
+*.db
+gamma.md

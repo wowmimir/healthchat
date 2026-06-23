@@ -1,14 +1,30 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 from typing import Dict
+
+from backend.database import init_db  # Import your DB initializer
 from backend.doctor_client import Doctor, DoctorClient
 from backend.graph import MedicalGraph
 from backend.schema import PatientState
 
-app = FastAPI()
+# 1. Define the lifespan context manager
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # This block executes BEFORE the server starts accepting requests
+    print("STARTUP: Initializing SQLite Database...")
+    init_db() 
+    
+    yield  # The application runs and processes requests here
+    
+    # This block executes AFTER the server receives a shutdown signal
+    print("SHUTDOWN: Cleaning up app resources...")
+
+# 2. Pass the lifespan handler directly into your FastAPI initialization instance
+app = FastAPI(lifespan=lifespan)
 
 @app.exception_handler(Exception)
 async def unhandled(request, exc):
@@ -43,20 +59,18 @@ class ChatResponse(BaseModel):
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest):
-    # Get or create session
     if request.session_id not in sessions:
         sessions[request.session_id] = PatientState()
     
     current_state = sessions[request.session_id]
     current_state.latest_user_message = request.message
     
-    # Process message through graph
     updated_state, bot_response = await medical_graph.process_turn(
         request.message,
-        current_state
+        current_state,
+        session_id=request.session_id
     )
     
-    # Update session
     sessions[request.session_id] = updated_state
 
     doctor_keyword = updated_state.doctor_keyword or updated_state.chief_complaint or "medicine"
@@ -65,9 +79,20 @@ async def chat_endpoint(request: ChatRequest):
 
     if updated_state.session_complete and not updated_state.emergency_flag:
         lookup = await run_in_threadpool(doctor_client.lookup, doctor_keyword)
-        doctor_keyword = lookup.keyword
         doctors = lookup.doctors
         doctor_lookup_error = lookup.error
+        
+        if not doctors and not doctor_lookup_error and doctor_keyword != "medicine":
+            print(f"DEBUG: '{doctor_keyword}' returned 0 results. Falling back to general medicine.")
+            fallback_keyword = "medicine"
+            fallback_lookup = await run_in_threadpool(doctor_client.lookup, fallback_keyword)
+            
+            if fallback_lookup.doctors:
+                doctor_keyword = fallback_lookup.keyword
+                doctors = fallback_lookup.doctors
+                doctor_lookup_error = fallback_lookup.error
+            else:
+                doctor_keyword = lookup.keyword
     
     return ChatResponse(
         response=bot_response,
