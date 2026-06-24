@@ -2,6 +2,6 @@
 .env
 .venv/
 plan.md
-apiendpoint.json
 *.db
 gamma.md
+progress.md

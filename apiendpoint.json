@@ -1,0 +1,183 @@
+{
+  "info": {
+    "_postman_id": "7034f464-fd89-4369-98af-70d00a7ad57b",
+    "name": "POLY CLINIC(using Chatbot)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "33183623"
+  },
+  "item": [
+    {
+      "name": "Doctor List using Chatbot",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Chatbot-Token",
+            "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": " application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"keyword\": \"medicine\",\r\n  \"limit\": 5\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://app.peerlessgjct.co.in/api/chatbot/doctors",
+          "protocol": "https",
+          "host": [
+            "app",
+            "peerlessgjct",
+            "co",
+            "in"
+          ],
+          "path": [
+            "api",
+            "chatbot",
+            "doctors"
+          ]
+        },
+        "description": "## Doctor List using Chatbot\n\nFetches a filtered list of doctors available for appointment booking via the chatbot interface. Results can be narrowed by a keyword (e.g., speciality or doctor name) and limited to a specified number of records.\n\n---\n\n## Authentication\n\nThis endpoint requires a **Chatbot Token** passed as a custom request header.\n\n| Header | Value | Description |\n|---|---|---|\n| `X-Chatbot-Token` | `<your_jwt_token>` | JWT-based authentication token issued for chatbot access. Must be included in every request. |\n\n---\n\n## Request Headers\n\n| Header | Value | Required |\n|---|---|---|\n| `X-Chatbot-Token` | JWT token | ✅ Yes |\n| `Content-Type` | `application/json` | ✅ Yes |\n\n---\n\n## Request Body\n\nSend a JSON object with the following parameters:\n\n| Parameter | Type | Required | Description |\n|---|---|---|---|\n| `keyword` | string | ✅ Yes | Search keyword to filter doctors (e.g., speciality name like `\"medicine\"`, or a doctor's name). |\n| `limit` | integer | ✅ Yes | Maximum number of doctor records to return in the response. |\n\n**Example:**\n```json\n{\n  \"keyword\": \"medicine\",\n  \"limit\": 5\n}\n```\n\n---\n\n## Response\n\n### 200 OK\n\nReturns a success response with a list of matching doctors.\n\n| Field | Type | Description |\n|---|---|---|\n| `success` | boolean | `true` if the request was processed successfully. |\n| `message` | string | Human-readable status message (e.g., `\"Chatbot doctor list fetched successfully\"`). |\n| `keyword` | string | The keyword used to filter the results, echoed back from the request. |\n| `total` | integer | Total number of doctor records returned in the `data` array. |\n| `data` | array | List of doctor objects matching the search criteria. |\n\n#### Doctor Object (`data[]`)\n\n| Field | Type | Description |\n|---|---|---|\n| `id` | integer | Unique identifier of the doctor. |\n| `name` | string | Full name of the doctor (e.g., `\"Dr. Amarnath Chakraborty\"`). |\n| `profile_image` | string | URL to the doctor's profile image. |\n| `experience` | integer | Years of professional experience. |\n| `app_url` | string | Deep link URL for the mobile app (may be empty). |\n| `web_url` | string | Web URL for booking an appointment with this doctor. |\n| `specialities` | array | List of speciality objects, each with `id` (integer) and `name` (string). |\n| `speciality_names` | string | Comma-separated string of speciality names for quick display. |\n| `availability_status` | string | Current availability status (e.g., `\"upcoming\"`, `\"available\"`). |\n| `next_available_date` | string | Date of the next available appointment slot (`YYYY-MM-DD` format). |\n| `next_available_time` | string | Start time of the next available slot (12-hour format, e.g., `\"01:00 PM\"`). |\n| `next_available_slot` | string | Full time range of the next available slot (e.g., `\"01:00 PM - 03:00 PM\"`). |\n\n**Example Response:**\n```json\n{\n  \"success\": true,\n  \"message\": \"Chatbot doctor list fetched successfully\",\n  \"keyword\": \"medicine\",\n  \"total\": 2,\n  \"data\": [\n    {\n      \"id\": 28,\n      \"name\": \"Dr. Amarnath Chakraborty\",\n      \"profile_image\": \"https://app.peerlessgjct.co.in/uploads/39/Dr-Amarnath-Chakraborty.png\",\n      \"experience\": 20,\n      \"app_url\": \"\",\n      \"web_url\": \"https://app.peerlessgjct.co.in/doctor-appointment/28\",\n      \"specialities\": [{ \"id\": 2, \"name\": \"General Medicine\" }],\n      \"speciality_names\": \"General Medicine\",\n      \"availability_status\": \"upcoming\",\n      \"next_available_date\": \"2026-06-17\",\n      \"next_available_time\": \"01:00 PM\",\n      \"next_available_slot\": \"01:00 PM - 03:00 PM\"\n    }\n  ]\n}\n```"
+      },
+      "response": [
+        {
+          "name": "Doctor List using Chatbot",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Chatbot-Token",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": " application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"keyword\": \"medicine\",\r\n  \"limit\": 5\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://app.peerlessgjct.co.in/api/chatbot/doctors",
+              "protocol": "https",
+              "host": [
+                "app",
+                "peerlessgjct",
+                "co",
+                "in"
+              ],
+              "path": [
+                "api",
+                "chatbot",
+                "doctors"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": null,
+          "header": [
+            {
+              "key": ":status",
+              "value": 200
+            },
+            {
+              "key": "date",
+              "value": "Tue, 16 Jun 2026 12:13:16 GMT"
+            },
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "content-length",
+              "value": "420"
+            },
+            {
+              "key": "x-powered-by",
+              "value": "PHP/8.3.30"
+            },
+            {
+              "key": "cache-control",
+              "value": "no-cache, private"
+            },
+            {
+              "key": "x-ratelimit-limit",
+              "value": "60"
+            },
+            {
+              "key": "x-ratelimit-remaining",
+              "value": "59"
+            },
+            {
+              "key": "access-control-allow-origin",
+              "value": "*"
+            },
+            {
+              "key": "content-encoding",
+              "value": "br"
+            },
+            {
+              "key": "platform",
+              "value": "hostinger"
+            },
+            {
+              "key": "panel",
+              "value": "hpanel"
+            },
+            {
+              "key": "content-security-policy",
+              "value": "upgrade-insecure-requests"
+            },
+            {
+              "key": "server",
+              "value": "hcdn"
+            },
+            {
+              "key": "alt-svc",
+              "value": "h3=\":443\"; ma=86400"
+            },
+            {
+              "key": "x-hcdn-request-id",
+              "value": "a757bb459387a040c0cd8266df28d880-mum-edge5"
+            },
+            {
+              "key": "x-hcdn-cache-status",
+              "value": "DYNAMIC"
+            },
+            {
+              "key": "x-hcdn-upstream-rt",
+              "value": "0.136"
+            },
+            {
+              "key": "accept-ranges",
+              "value": "bytes"
+            }
+          ],
+          "cookie": [],
+          "body": "{\n    \"success\": true,\n    \"message\": \"Chatbot doctor list fetched successfully\",\n    \"keyword\": \"medicine\",\n    \"total\": 2,\n    \"data\": [\n        {\n            \"id\": 28,\n            \"name\": \"Dr. Amarnath Chakraborty\",\n            \"profile_image\": \"https://app.peerlessgjct.co.in/uploads/39/Dr-Amarnath-Chakraborty.png\",\n            \"experience\": 20,\n            \"app_url\": \"\",\n            \"web_url\": \"https://app.peerlessgjct.co.in/doctor-appointment/28\",\n            \"specialities\": [\n                {\n                    \"id\": 2,\n                    \"name\": \"General Medicine\"\n                }\n            ],\n            \"speciality_names\": \"General Medicine\",\n            \"availability_status\": \"upcoming\",\n            \"next_available_date\": \"2026-06-17\",\n            \"next_available_time\": \"01:00 PM\",\n            \"next_available_slot\": \"01:00 PM - 03:00 PM\"\n        },\n        {\n            \"id\": 29,\n            \"name\": \"Dr. Amit Ghosh\",\n            \"profile_image\": \"https://app.peerlessgjct.co.in/uploads/38/Dr.-Amit-Ghosh.png\",\n            \"experience\": 36,\n            \"app_url\": \"\",\n            \"web_url\": \"https://app.peerlessgjct.co.in/doctor-appointment/29\",\n            \"specialities\": [\n                {\n                    \"id\": 2,\n                    \"name\": \"General Medicine\"\n                }\n            ],\n            \"speciality_names\": \"General Medicine\",\n            \"availability_status\": \"upcoming\",\n            \"next_available_date\": \"2026-06-18\",\n            \"next_available_time\": \"12:30 PM\",\n            \"next_available_slot\": \"12:30 PM - 03:00 PM\"\n        }\n    ]\n}"
+        }
+      ]
+    }
+  ]
+}
